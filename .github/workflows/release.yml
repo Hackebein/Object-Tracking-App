@@ -1,0 +1,32 @@
+name: Release Application
+
+on:
+  push:
+    branches:
+     - main
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Package Application
+      uses: JackMcKew/pyinstaller-action-windows@main
+      with:
+        path: src
+
+    - name: zip Application
+      run: |
+        zip -r ObjectTracking.zip dist/ObjectTracking dist/ObjectTracking.exe
+        zip -r ObjectTracking_NoConsole.zip dist/ObjectTracking_NoConsole dist/ObjectTracking_NoConsole.exe
+
+    - name: Make Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ObjectTracking.zip
+          ObjectTracking_NoConsole.zip
+        tag_name: ${{ github.sha }}

@@ -1,0 +1,18 @@
+{
+	"source": "builtin",
+	"applications": [
+		{
+			"app_key": "Hackebein.ObjectTracking",
+			"launch_type": "binary",
+			"binary_path_windows": "./ObjectTracking_NoConsole.exe",
+			"is_dashboard_overlay": true,
+
+			"strings": {
+				"en_us": {
+					"name": "ObjectTracking",
+					"description": "OpenVR tracking data to VRChat via OSC"
+				}
+			}
+		}
+	]
+}

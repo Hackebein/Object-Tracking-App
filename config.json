@@ -1,0 +1,7 @@
+{
+    "IP": "127.0.0.1",
+    "Port": 9000,
+    "Server_Port": 0,
+    "HTTP_Port": 0,
+    "UpdateRate": 144
+}
