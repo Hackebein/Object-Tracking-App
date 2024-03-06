@@ -4,7 +4,7 @@
 		{
 			"app_key": "Hackebein.ObjectTracking",
 			"launch_type": "binary",
-			"binary_path_windows": "./ObjectTracking_NoConsole.exe",
+			"binary_path_windows": "../ObjectTracking_NoConsole.exe",
 			"is_dashboard_overlay": true,
 
 			"strings": {
