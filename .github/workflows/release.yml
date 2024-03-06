@@ -36,11 +36,11 @@ jobs:
 
     - name: zip Application
       run: |
-        zip -r ObjectTracking.zip . -i "dist/ObjectTracking/*"
+        Compress-Archive -Path dist/ObjectTracking/* -Destination ObjectTracking.zip
 
     - name: zip Application (NoConsole)
       run: |
-        zip -r ObjectTracking_NoConsole.zip . -i "dist/ObjectTracking_NoConsole/*"
+        Compress-Archive -Path dist/ObjectTracking_NoConsole/* -Destination ObjectTracking_NoConsole.zip
 
     - name: Make Release
       uses: softprops/action-gh-release@v1
