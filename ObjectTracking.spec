@@ -27,7 +27,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='ObjectTracking.exe',
+    name='ObjectTracking',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
