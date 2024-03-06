@@ -1,5 +1,8 @@
 name: Release Application
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -13,15 +16,33 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Package Application
-      uses: JackMcKew/pyinstaller-action-windows@main
+    - name: Create Executable
+      uses: sayyid5416/pyinstaller@v1
       with:
-        path: src
+        spec: 'ObjectTracking.spec'
+        requirements: 'requirements.txt'
+        python_ver: '3.11.8'
+        python_arch: 'x64'
+        clean_checkout: 'false'
+
+    - name: Create Executable (NoConsole)
+      uses: sayyid5416/pyinstaller@v1
+      with:
+        spec: 'ObjectTracking_NoConsole.spec'
+        requirements: 'requirements.txt'
+        python_ver: '3.11.8'
+        python_arch: 'x64'
+        clean_checkout: 'false'
 
     - name: zip Application
-      run: |
-        zip -r ObjectTracking.zip dist/ObjectTracking dist/ObjectTracking.exe
-        zip -r ObjectTracking_NoConsole.zip dist/ObjectTracking_NoConsole dist/ObjectTracking_NoConsole.exe
+      uses: montudor/action-zip@v1
+      with:
+        args: zip -r ObjectTracking.zip dist/ObjectTracking/
+
+    - name: zip Application (NoConsole)
+      uses: montudor/action-zip@v1
+      with:
+        args: zip -r ObjectTracking_NoConsole.zip dist/ObjectTracking_NoConsole/
 
     - name: Make Release
       uses: softprops/action-gh-release@v1
@@ -29,4 +50,4 @@ jobs:
         files: |
           ObjectTracking.zip
           ObjectTracking_NoConsole.zip
-        tag_name: ${{ github.sha }}
+        tag_name: "v0.0.0"

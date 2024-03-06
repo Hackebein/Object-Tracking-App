@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('.\\config.json', '.'), ('.\\app.vrmanifest', '.'), ('.\\first_launch', '.')]
+datas = [('config.json', '.'), ('app.vrmanifest', '.'), ('first_launch', '.')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('openvr')
