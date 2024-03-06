@@ -35,14 +35,12 @@ jobs:
         clean_checkout: 'false'
 
     - name: zip Application
-      uses: montudor/action-zip@v1
-      with:
-        args: zip -r ObjectTracking.zip dist/ObjectTracking/
+      run: |
+        zip -r ObjectTracking.zip . -i "dist/ObjectTracking/*"
 
     - name: zip Application (NoConsole)
-      uses: montudor/action-zip@v1
-      with:
-        args: zip -r ObjectTracking_NoConsole.zip dist/ObjectTracking_NoConsole/
+      run: |
+        zip -r ObjectTracking_NoConsole.zip . -i "dist/ObjectTracking_NoConsole/*"
 
     - name: Make Release
       uses: softprops/action-gh-release@v1
