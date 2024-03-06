@@ -5,8 +5,8 @@ permissions:
 
 on:
   push:
-    branches:
-     - main
+    tags:
+      - "v*.*.*"
 
 jobs:
   build:
@@ -48,4 +48,3 @@ jobs:
         files: |
           ObjectTracking.zip
           ObjectTracking_NoConsole.zip
-        tag_name: "v0.0.0"
