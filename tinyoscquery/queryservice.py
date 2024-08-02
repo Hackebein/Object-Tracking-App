@@ -1,3 +1,4 @@
+import socket
 from zeroconf import ServiceInfo, Zeroconf
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from .shared.node import OSCQueryNode, OSCHostInfo, OSCAccess
@@ -32,11 +33,11 @@ class OSCQueryService(object):
         self._startOSCQueryService()
         self._advertiseOSCService()
         self.http_server = OSCQueryHTTPServer(self.root_node, self.host_info, ('', self.httpPort), OSCQueryHTTPHandler)
-        self.http_thread = threading.Thread(target=self._startHTTPServer)
+        self.http_thread = threading.Thread(target=self._startHTTPServer, daemon=True)
         self.http_thread.start()
 
-    def stop(self):
-        self.http_server.shutdown()
+    def __del__(self):
+        self._zeroconf.unregister_all_services()
 
     def add_node(self, node):
         self.root_node.add_child_node(node)
@@ -55,7 +56,7 @@ class OSCQueryService(object):
     def _startOSCQueryService(self):
         oscqsDesc = {'txtvers': 1}
         oscqsInfo = ServiceInfo("_oscjson._tcp.local.", "%s._oscjson._tcp.local." % self.serverName, self.httpPort, 
-        0, 0, oscqsDesc, "%s.oscjson.local." % self.serverName, addresses=["127.0.0.1"])
+        0, 0, oscqsDesc, "%s.oscjson.local." % self.serverName, addresses=[socket.inet_aton("127.0.0.1")])
         self._zeroconf.register_service(oscqsInfo)
 
 
@@ -65,7 +66,7 @@ class OSCQueryService(object):
     def _advertiseOSCService(self):
         oscDesc = {'txtvers': 1}
         oscInfo = ServiceInfo("_osc._udp.local.", "%s._osc._udp.local." % self.serverName, self.oscPort, 
-        0, 0, oscDesc, "%s.osc.local." % self.serverName, addresses=["127.0.0.1"])
+        0, 0, oscDesc, "%s.osc.local." % self.serverName, addresses=[socket.inet_aton("127.0.0.1")])
 
         self._zeroconf.register_service(oscInfo)
 

@@ -1,2 +1,8 @@
 build
 dist
+tinyoscquery/__pycache__/__init__.cpython-310.pyc
+tinyoscquery/__pycache__/query.cpython-310.pyc
+tinyoscquery/__pycache__/queryservice.cpython-310.pyc
+tinyoscquery/__pycache__/utility.cpython-310.pyc
+tinyoscquery/shared/__pycache__/__init__.cpython-310.pyc
+tinyoscquery/shared/__pycache__/node.cpython-310.pyc

@@ -1,0 +1,35 @@
+name: Publish on Steam
+
+on:
+  release:
+    types: [prereleased, released]
+
+jobs:
+  Publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download each asset
+      uses: robinraju/release-downloader@v1
+      with:
+        tag: ${{ github.event.release.name }}
+        fileName: '*.zip'
+        tarBall: false
+        zipBall: false
+
+    - name: Unpack zip
+      run: |
+        mkdir win64
+        unzip -o '*-win64.zip' -d StandaloneWindows64
+
+    - uses: game-ci/steam-deploy@v3
+      #if: ${{ hashFiles('StandaloneWindows64/') != '' && github.event.release.prerelease == true }}
+      with:
+        username: ${{ secrets.STEAM_USERNAME }}
+        configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+        appId: 3140770
+        buildDescription: ${{ github.event.release.name }}
+        rootPath: .
+        depot1Path: StandaloneWindows64
+        releaseBranch: beta

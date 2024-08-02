@@ -1,34 +1,26 @@
-name: Release Application
-
-permissions:
-  contents: write
+name: Build
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - '*'
 
 jobs:
   build:
-
     runs-on: windows-latest
-
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v2
+
+    - name: Prepare Build
+      run: |
+        touch first_launch
 
     - name: Create Executable
       uses: sayyid5416/pyinstaller@v1
       with:
-        spec: 'ObjectTracking.spec'
-        requirements: 'requirements.txt'
-        python_ver: '3.11.8'
-        python_arch: 'x64'
-        clean_checkout: 'false'
-
-    - name: Create Executable (NoConsole)
-      uses: sayyid5416/pyinstaller@v1
-      with:
-        spec: 'ObjectTracking_NoConsole.spec'
+        spec: 'ObjectTracking-win64.spec'
         requirements: 'requirements.txt'
         python_ver: '3.11.8'
         python_arch: 'x64'
@@ -36,15 +28,13 @@ jobs:
 
     - name: zip Application
       run: |
-        Compress-Archive -Path dist/ObjectTracking/* -Destination ObjectTracking.zip
-
-    - name: zip Application (NoConsole)
-      run: |
-        Compress-Archive -Path dist/ObjectTracking_NoConsole/* -Destination ObjectTracking_NoConsole.zip
+        Compress-Archive -Path dist/ObjectTracking/* -Destination HackebeinObjectTracking-${{ github.ref_name }}-win64.zip
 
     - name: Make Release
       uses: softprops/action-gh-release@v1
       with:
+        prerelease: ${{ contains( github.ref_name , '-') }}
         files: |
-          ObjectTracking.zip
-          ObjectTracking_NoConsole.zip
+          HackebeinObjectTracking-*.zip
+        token: ${{ secrets.TOKEN }}
+      

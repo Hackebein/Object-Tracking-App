@@ -1,6 +1,7 @@
 import json
-import math
+import random
 import re
+import string
 import numpy
 import openvr
 import sys
@@ -10,6 +11,7 @@ import traceback
 import ctypes
 import argparse
 import zeroconf
+import logging
 from pythonosc import udp_client, dispatcher, osc_server
 from tinyoscquery.queryservice import OSCQueryService
 from tinyoscquery.utility import get_open_tcp_port, get_open_udp_port
@@ -18,32 +20,24 @@ from psutil import process_iter
 from threading import Thread
 from scipy.spatial.transform import Rotation
 
+#TODO VERIFY THIS FUCKING PARAMETER EXPRESSION CONFIG
 
-# TODO: code style
 def get_absolute_path(relative_path) -> str:
-    """
-    Gets absolute path from relative path
-    Parameters:
-        relative_path (str): Relative path
-    Returns:
-        str: Absolute path
-    """
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+def get_absolute_data_path(relative_path) -> str:
+    base_path = os.getenv('APPDATA') or getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    base_path = os.path.join(base_path, 'ObjectTracking')
+    if not os.path.exists(base_path):
+        os.makedirs(base_path)
     return os.path.join(base_path, relative_path)
 
 
 def send_desktop_notification(title: str, message: str) -> None:
+    logger.info(f"Sent desktop notification: {title} - {message}")
     if os.name == "nt":
         ctypes.windll.user32.MessageBoxW(0, title, message, 0)
-
-
-def cls() -> None:
-    """
-    Clears Console.
-    Returns:
-        None
-    """
-    os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def set_title(title: str) -> None:
@@ -51,7 +45,7 @@ def set_title(title: str) -> None:
         ctypes.windll.kernel32.SetConsoleTitleW(title)
 
 
-def is_running() -> bool:
+def is_vrchat_running() -> bool:
     """
     Checks if VRChat is running.
     Returns:
@@ -61,22 +55,17 @@ def is_running() -> bool:
     return _proc_name in (p.name() for p in process_iter())
 
 
-def stop() -> None:
-    """
-    Stops the program.
-    Returns:
-        None
-    """
-    try:
-        openvr.shutdown()
-    except Exception as e:
-        print("Error shutting down OVR: " + str(e))
-
-    if oscQueryServer:
-        oscQueryServer.shutdown()
-    # if oscqs:
-    #    oscqs.stop()
-    sys.exit()
+def find_service_by_regex(browser: OSCQueryBrowser, regex) -> zeroconf.ServiceInfo | None:
+    for svc in browser.get_discovered_oscquery():
+        client = OSCQueryClient(svc)
+        host_info = client.get_host_info()
+        if host_info is None:
+            continue
+        if re.match(regex, host_info.name):
+            logger.debug(f"Found service by regex: {host_info.name}")
+            return svc
+    logger.debug(f"Service not found by regex: {regex}")
+    return None
 
 
 def wait_get_oscquery_client() -> OSCQueryClient:
@@ -85,77 +74,92 @@ def wait_get_oscquery_client() -> OSCQueryClient:
     Returns:
         OSCQueryClient: OSCQueryClient for VRChat
     """
+    logger.info("Waiting for VRChat Client to be discovered ...")
     service_info = None
-    print("Waiting for VRChat Client to be discovered ...")
     while service_info is None:
         browser = OSCQueryBrowser()
         time.sleep(1)  # Wait for discovery
-        service_info = browser.find_service_by_name("VRChat")
-    print("Connecting to VRChat Client ...")
+        # TODO: check if multiple VRChat clients are found
+        service_info = find_service_by_regex(browser, r"VRChat-Client-[A-F0-9]{6}")
+    logger.info(f"Connecting to VRChat Client ({service_info.name}) ...")
     client = OSCQueryClient(service_info)
-    print("Waiting for VRChat Avatar to be ready ...")
-    while client.query_node(AVATAR_CHANGE_PARAMETER) is None:
+    logger.info("Waiting for VRChat Client to be ready ...")
+    while client.query_node("/avatar/change") is None:
         time.sleep(1)
-    print("Connected to VRChat Client successful!")
+    logger.info("VRChat Client is ready!")
     return client
 
 
 def wait_get_oscquery_server() -> osc_server.ThreadingOSCUDPServer:
-    print("Starting OSCquery Server ...")
+    logger.info("Starting OSCquery Server ...")
     disp = dispatcher.Dispatcher()
     disp.set_default_handler(osc_message_handler)
-    server = osc_server.ThreadingOSCUDPServer((IP, SERVER_PORT), disp)
-    Thread(target=server.serve_forever, daemon=True).start()
-    print("Announcing Server as HackOSC ...")
-    OSCQueryService("HackOSC", HTTP_PORT, SERVER_PORT).advertise_endpoint(AVATAR_CHANGE_PARAMETER)
-    return server
+    oscQueryServer = osc_server.ThreadingOSCUDPServer((IP, SERVER_PORT), disp)
+    Thread(target=oscQueryServer.serve_forever, daemon=True).start()
+    # Announce Server
+    oscServiceName = "ObjectTracking"
+    if (len(SERVICE_NAME_INDICATOR) > 0 and SERVICE_NAME_INDICATOR != "none"):
+        oscServiceName += '-'
+        if (SERVICE_NAME_INDICATOR == "random"):
+            oscServiceName += ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+        else:
+            oscServiceName += SERVICE_NAME_INDICATOR
+    logger.info(f"Announcing Server as {oscServiceName} ...")
+    oscQueryService = OSCQueryService(oscServiceName, HTTP_PORT, SERVER_PORT)
+    oscQueryService.advertise_endpoint("/avatar/change")
+    # TODO: add all endpoints
+    
+    return oscQueryServer
     
 
 def send_parameter(parameter: str, value) -> None:
     """
-    Sends a parameter to VRChat via OSC.
+    Sends a parameter to VRChat via OSC if parameter got updated.
     Parameters:
         parameter (str): Name of the parameter
         value (any): Value of the parameter
     Returns:
         None
     """
-    #print(f"Sending {parameter} = {value} ({type(value)})")
-    debug_osc_message_out(AVATAR_PARAMETERS_PREFIX + parameter, value)
-    oscClient.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
+    if get_parameter(parameter, None) != value:
+        logger.debug(f"<  > {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
+        oscClient.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
+    else:
+        logger.debug(f"<\\> {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
 
 
-def send_ot_float_local(name: str, axe: str, accuracy: int, value: float):
-    """Sends a local float"""
-    # TODO: support accuracy
-    value = clamp(value, 0)
-    send_parameter(f"ObjectTracking/{name}/L{axe}", value)
-
-
-def send_ot_float_remote(name: str, axe: str, accuracy: int, value: float):
-    """Sends a remote float"""
-    # int for 8 bits
-    # bool for 1 bit
-    value = clamp(value, 0)
-    value_bin = round(value * (2**accuracy-1))
-    accuracy_bytes, accuracy_bits = divmod(accuracy, 8)
-    for i in range(accuracy_bytes):
-        value_bin, byte = divmod(value_bin, 2**8)
-        send_parameter(f"ObjectTracking/{name}/R{axe}-Byte{i}", byte)
-    for i in range(accuracy_bits):
-        value_bin, bit = divmod(value_bin, 2**1)
-        send_parameter(f"ObjectTracking/{name}/R{axe}-Bit{i}", bit)
-
-
-def debug_osc_message_in(addr, value) -> None:
-    if "/" in addr.removeprefix(AVATAR_PARAMETERS_PREFIX) and not addr.removeprefix(AVATAR_PARAMETERS_PREFIX).startswith("ObjectTracking/LHR-"):
-        print(f"< {addr}: {value}")
-    pass
-
-
-def debug_osc_message_out(addr, value) -> None:
-    #print(f"> {addr}: {value}")
-    pass
+def send_position(tracker_name: str, matrix, tracker_config) -> None:
+    px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(matrix)
+    
+    offset = 0
+    for key, value in {
+        "PX": px,     # 0
+        "PY": py,     # 1
+        "PZ": pz,     # 2
+        "RX": rx*180, # 3
+        "RY": ry*180, # 4
+        "RZ": rz*180  # 5
+    }.items():
+        logger.debug(f"Sending {tracker_name}/{key} = {value}")
+        
+        #local
+        value_local = remap(value, tracker_config[7 + offset], tracker_config[19 + offset], 0, 1)
+        value_local = clamp(value_local, 0)
+        send_parameter(f"ObjectTracking/{tracker_name}/L{key}", value_local)
+        
+        #remote
+        value_remote = remap(value, tracker_config[13 + offset], tracker_config[25 + offset], 0, 1)
+        value_remote = clamp(value_remote, 0)
+        value_bin = round(value * (2**tracker_config[1 + offset]-1))
+        accuracy_bytes, accuracy_bits = divmod(tracker_config[1 + offset], 8)
+        for i in range(accuracy_bytes):
+            value_bin, byte = divmod(value_bin, 2**8)
+            send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Byte{i}", byte)
+        for i in range(accuracy_bits):
+            value_bin, bit = divmod(value_bin, 2**1)
+            send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Bit{i}", bit)
+        
+        offset += 1
 
 
 def set_parameter(parameter: str, value) -> None:
@@ -193,8 +197,10 @@ def on_avatar_change(addr, value) -> None:
     Returns:
         None
     """
+    logger.info(f"Avatar changed to {value}")
     parameters = {}
     trackers = {}
+    tracking_references_raw = {}
 
 
 def osc_message_handler(addr, value) -> None:
@@ -205,12 +211,15 @@ def osc_message_handler(addr, value) -> None:
         value (any): Value of the message
     Returns:
         None
-    """
-    debug_osc_message_in(addr, value)
+    """ 
     parameter = addr.removeprefix(AVATAR_PARAMETERS_PREFIX)
-    if addr == AVATAR_CHANGE_PARAMETER:
+    if parameter.startswith("ObjectTracking/"):
+        logger.debug(f" ><  {addr}: {value} ({type(value)})")
+    if addr == "/avatar/change":
         on_avatar_change(addr, value)
     set_parameter(parameter, value)
+    if parameter == "ObjectTracking/config/index" and value == 0:
+        logger.info(trackers)
     if parameter == "ObjectTracking/config/index" and value != 0:
         device = get_parameter("ObjectTracking/config/device", 0)
         index = value
@@ -221,13 +230,13 @@ def osc_message_handler(addr, value) -> None:
         if trackers[device].get(index, None) is not None:
             old = trackers[device][index]
         if old != new:
-            print(f"{device}[{index}] {old} => {new}")
+            logger.info(f"{device}[{index}] {old} => {new}")
         trackers[device][index] = new
     if re.match(r"ObjectTracking/config/(?!index|value)", parameter) and value > 0:
         set_parameter("ObjectTracking/config/device", parameter.removeprefix("ObjectTracking/config/"))
     if parameter == "ObjectTracking/isStabilized" and value:
         oscClient.send_message("/input/Vertical", 0.0)
-    if parameter == "ObjectTracking/goStabilized" and value:
+    if parameter == "ObjectTracking/goStabilized" and not get_parameter("ObjectTracking/isStabilized", False) and value:
         oscClient.send_message("/input/Vertical", 1.0)
 
 
@@ -237,247 +246,274 @@ def clamp(n, minn=-1, maxn=1):
 
 
 def remap(x: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
+    if in_max == in_min:
+        return 0
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def ovr_pose_to_osc_pose(ovr, relative=False):
-    """Converts OpenVR pose to OSC pose"""
-    ovr = numpy.array(list(ovr))
+def rotate_matrix_xz(matrix: numpy.ndarray, pill: numpy.ndarray) -> numpy.ndarray:
+    # Convert degrees to radians
+    px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(pill)
+    radians = numpy.deg2rad(ry * 180)
 
+    rotation = numpy.array([
+        [numpy.cos(radians), 0, numpy.sin(radians)],
+        [0, 1, 0],
+        [-numpy.sin(radians), 0, numpy.cos(radians)]
+    ])
+        
+    # position adjustment
+    matrix[:3, 3] = numpy.dot(rotation, matrix[:3, 3])
+    
+    # rotation adjustment
+    matrix[:3, :3] = numpy.dot(rotation, matrix[:3, :3])
+    matrix[:3, :3] = numpy.dot(rotation, matrix[:3, :3])
+        
+    return matrix
+    
+    
+def print_matrix(name: str, matrix: numpy.ndarray) -> None:
+    px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(matrix)
+    logger.debug(f"{name}: px: {round(px, 3)}m, py: {round(py, 3)}m, pz: {round(pz, 3)}m, rx: {round(rx*180, 2)}° ({round(rx, 2)}), ry: {round(ry*180, 2)}° ({round(ry, 2)}), rz: {round(rz*180, 2)}° ({round(rz, 2)})")
+
+
+def compute_tracking_reference_position(tracking_reference_positions):
+    tracking_reference_positions = numpy.array(list(tracking_reference_positions.values()))
+    tracking_reference_position = numpy.eye(4)
+    if len(tracking_reference_positions):
+        # Position
+        tracking_reference_position[:3, 3] = numpy.sum(tracking_reference_positions[:, 0:3, 3], axis=0) / len(tracking_reference_positions)
+
+        # Rotation
+        quaternions = [Rotation.from_matrix(matrix).as_quat(False) for matrix in tracking_reference_positions[:, 0:3, 0:3]]
+        q_mean = numpy.array(quaternions).mean(axis=0)
+        avg_quaternion =  q_mean / numpy.linalg.norm(q_mean)
+        tracking_reference_position[:3, :3] = Rotation.from_quat(avg_quaternion).as_matrix()
+    return tracking_reference_position
+
+
+
+def relative_matrix(parent: numpy.ndarray, child: numpy.ndarray) -> numpy.ndarray:
+    result = numpy.eye(4)
+    result[0:3, 0:3] = numpy.dot(numpy.linalg.inv(parent[0:3, 0:3]), child[0:3, 0:3])
+    result[0:3, 3] = child[0:3, 3] - parent[0:3, 3]
+    return result
+
+
+def convert_matrix34_to_matrix44(matrix34: openvr.HmdMatrix34_t) -> numpy.ndarray:
+    """ Convert OpenVR's 3x4 matrix to a 4x4 NumPy matrix """
+    return numpy.array([
+        [matrix34.m[0][0], matrix34.m[0][1], -matrix34.m[0][2], matrix34.m[0][3]],
+        [matrix34.m[1][0], matrix34.m[1][1], -matrix34.m[1][2], matrix34.m[1][3]],
+        [-matrix34.m[2][0], -matrix34.m[2][1], matrix34.m[2][2], -matrix34.m[2][3]],
+        [0, 0, 0, 1]
+    ])
+
+
+def set_y_and_xz_rotation_to_zero(matrix: numpy.ndarray) -> numpy.ndarray:
+    # set y to zero
+    matrix[1, 3] = 0
+    # set x and z rotation to 0
+    theta = numpy.arctan2(matrix[2, 0], matrix[0, 0])
+    matrix[0:3, 0:3] = numpy.array([
+        [numpy.cos(theta), 0, numpy.sin(theta)],
+        [0, 1, 0],
+        [-numpy.sin(theta), 0, numpy.cos(theta)]
+    ])
+    return matrix
+
+
+def set_y_and_rotation_to_zero(matrix: numpy.ndarray) -> numpy.ndarray:
+    # set y to zero
+    matrix[1, 3] = 0
+    # set rotation to 0
+    matrix[0:3, 0:3] = numpy.eye(3)
+    return matrix
+
+
+def convert_matrix_to_osc_tuple(pose: numpy.ndarray) -> tuple[float, float, float, float, float, float]:
     # position
-    x, y, z = ovr[0:3, 3]
+    x, y, z = pose[0:3, 3]
     x = float(x)
     y = float(y)
     z = float(z)
 
     # rotation
-    # TODO: research (Transform.rotationOrder) this could have changed to XYZ by end of unity 2019???
-    pitch, roll, yaw = Rotation.from_matrix(ovr[0:3, 0:3]).as_euler("YXZ")
-    roll = float(-roll / math.pi)  # value range: -0.5 - 0.5
-    pitch = float(-pitch / math.pi)  # value range: -1.0 - 1.0
-    yaw = float(yaw / math.pi)  # value range: -1.0 - 1.0
-    
-    if relative:
-        x, y, z, roll, pitch, yaw = (
-            (numpy.array([x, y, z, roll, pitch, yaw]) - numpy.array(playspace_center))
-            -
-            (numpy.array(avatar_root) - numpy.array(playspace_center))
-        ).tolist()
-        x, z = rotate((0, 0), (x, z), math.radians(avatar_root[4]))
+    yaw, pitch, roll = Rotation.from_matrix(pose[0:3, 0:3]).as_euler("YXZ")
+    # x, value range: -0.5 - 0.5
+    pitch = float(pitch / numpy.pi)
+    # y, value range: -1.0 - 1.0
+    yaw = float(yaw / numpy.pi)
+    # z, value range: -1.0 - 1.0
+    roll = float(roll / numpy.pi)
 
-    return (x, y, z, roll, pitch, yaw)
+    return (x, y, z, pitch, yaw, roll)
 
 
-def debug_position(name, px, py, pz, rx, ry, rz):
-    """Prints a position and rotation to the console"""
-    print(f"{name}: px: {round(px, 3)}m, py: {round(py, 3)}m, pz: {round(pz, 3)}m, rx: {round(rx, 2)}, ry: {round(ry, 2)}, rz: {round(rz, 2)}")
+def get_logger():
+    log_level = logging.DEBUG
+    if os.path.basename(sys.executable).lower() == "objecttracking.exe":
+        log_level = logging.INFO
+
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(get_absolute_data_path("object_tracking.log")),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
 
 
-def rotate(origin, point, angle):
-    """
-    Rotate a point counterclockwise by a given angle around a given origin.
-
-    The angle should be given in radians.
-    """
-    ox, oy = origin
-    px, py = point
-
-    qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-    qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
-    return qx, qy
-
+logger = get_logger()
 
 # Argument Parser
 parser = argparse.ArgumentParser(
     description='ObjectTracking: OpenVR tracking data to VRChat via OSC.')
-parser.add_argument('-d', '--debug', required=False, action='store_true', help='prints values for debugging')
 parser.add_argument('-i', '--ip', required=False, type=str, help="set OSC ip. Default=127.0.0.1")
 parser.add_argument('-p', '--port', required=False, type=str, help="set OSC port. Default=9000")
 args = parser.parse_args()
 
-first_launch_file = get_absolute_path("first_launch")
-config_path = get_absolute_path("config.json")
-manifest_path = get_absolute_path("app.vrmanifest")
 application = openvr.init(openvr.VRApplication_Utility)
-openvr.VRInput().setActionManifestPath(config_path)
-openvr.VRApplications().addApplicationManifest(manifest_path)
-if os.path.isfile(first_launch_file):
-    openvr.VRApplications().setApplicationAutoLaunch("Hackebein.ObjectTracking", True)
-    os.remove(first_launch_file)
+openvr.VRApplications().addApplicationManifest(get_absolute_path("app.vrmanifest"))
 
-config = json.load(open(config_path))
-trackers = {}
-#trackers = {
-#    'global': {1: 1},
-#    'LHR-32E2511E': {1: 9, 2: 8, 3: 9, 4: 7, 5: 7, 6: 7, 7: -6, 8: -6, 9: -6, 10: -180, 11: -180, 12: -180, 13: -5, 14: 0, 15: -5, 16: -180, 17: -180, 18: -180, 19: 6, 20: 6, 21: 6, 22: 180, 23: 180, 24: 180, 25: 5, 26: 5, 27: 5, 28: 180, 29: 180, 30: 180},
-#}
-parameters = {}
+# first start
+if not os.path.isfile(get_absolute_data_path("config.json")):
+    try:
+        openvr.VRApplications().setApplicationAutoLaunch("Hackebein.ObjectTracking", True)
+    except Exception as e:
+        pass
+    with open(get_absolute_data_path("config.json"), 'w') as f:
+        json.dump({
+            "IP": "127.0.0.1",
+            "Port": 9000,
+            "Server_Port": 0,
+            "HTTP_Port": 0,
+            "UpdateRate": 90,
+            "ServiceNameIndicator": "None"
+        }, f, indent=4)
+
+openvr.VRInput().setActionManifestPath(get_absolute_data_path("config.json"))
+config = json.load(open(get_absolute_data_path("config.json")))
 
 IP = args.ip if args.ip else config["IP"]
+# shouldn't that be read from zeroconf?
 PORT = int(args.port if args.port else config["Port"])
-SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_open_udp_port())
-HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port())
-UPDATEINTERVAL = 1 / float(config['UpdateRate'])
+SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_open_udp_port()) # OSC QUERY SERVER
+HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
+UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
+SERVICE_NAME_INDICATOR = config["ServiceNameIndicator"].strip().lower()
 AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
-AVATAR_CHANGE_PARAMETER = "/avatar/change"
-TITLE="ObjectTracking v0.0.0" + (" (Debug)" if args.debug else "")
+TITLE = "ObjectTracking v0.1.0"
 
 set_title(TITLE)
-print(TITLE)
-print(f" IP: {IP}")
-print(f" Port: {PORT}")
-print(f" Server Port: {SERVER_PORT}")
-print(f" HTTP Port: {HTTP_PORT}")
-print(f" Update Rate: {config['UpdateRate']}Hz / Update Interval: {UPDATEINTERVAL * 1000:.2f}ms")
-print("")
 
-playspace_center = [.0, .0, .0, .0, .0, .0]
-avatar_root = [.0, .0, .0, .0, .0, .0]
+logger.info(f"IP: {IP}")
+logger.info(f"Port: {PORT}")
+logger.info(f"Server Port: {SERVER_PORT}")
+logger.info(f"HTTP Port: {HTTP_PORT}")
+logger.info(f"Update Rate: {config['UpdateRate']}Hz / Update Interval: {UPDATE_INTERVAL * 1000:.2f}ms")
+logger.info(f"Service Name Indicator: {SERVICE_NAME_INDICATOR}")
+
+# tracker config
+trackers = {}
+# osc recieved parameters
+parameters = {}
+
+hmd_raw = None
+pill_raw = None
+tracking_references_raw = {}
+tracking_objects_raw = {}
 try:
-    print("Waiting for VRChat Client to start ...")
-    while not is_running():  # TODO: check consistently for this
+    logger.info("Waiting for VRChat Client to start ...")
+    while not is_vrchat_running():  # TODO: check consistently for this
         time.sleep(1)
-    print(f"Waiting for OSCClient({IP}:{PORT}) to start ...")
+    logger.info(f"Waiting for OSCClient to connect to {IP}:{PORT} ...")
     oscClient = udp_client.SimpleUDPClient(IP, PORT)
     
-    print("Waiting for OSCQueryClient to connect to VRChat Client...")
+    logger.info("Waiting for OSCQueryClient to connect to VRChat Client ...")
     oscQueryClient = wait_get_oscquery_client()
     
-    print("Waiting for OSCQueryServer to start ...")
+    logger.info("Waiting for OSCQueryServer to start ...")
     oscQueryServer = wait_get_oscquery_server()
     
-    print("Init complete!")
+    logger.info("Init complete!")
     cycle_start_time = time.perf_counter()
     while True:
-        wait_time = UPDATEINTERVAL - (time.perf_counter() - cycle_start_time)
+        wait_time = UPDATE_INTERVAL - (time.perf_counter() - cycle_start_time)
         if wait_time > 0:
-            if wait_time / UPDATEINTERVAL < 0.1:
-                print(f"Warning: about {wait_time / UPDATEINTERVAL * 100:.0f}% frame time left, consider decreasing UpdateRate")
+            if wait_time / UPDATE_INTERVAL < 0.1:
+                logger.warn(f"Warning: about {wait_time / UPDATE_INTERVAL * 100:.0f}% frame time left")
             time.sleep(wait_time)
         else:
-            print(f"Warning: {abs(wait_time * 1000):.2f}ms behind schedule, decreasing UpdateRate recommended")
+            logger.warn(f"Warning: {abs(wait_time * 1000):.2f}ms behind schedule, decreasing UpdateRate recommended if this gets spammed")
         cycle_start_time = time.perf_counter()
-        tracking_reference_positions = {"PX": [], "PY": [], "PZ": [], "RX": [], "RY": [], "RZ": []}
-        devices = application.getDeviceToAbsoluteTrackingPose(
-            openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount)
         try:
+            hmd = None
+            pill = None
+            tracking_objects = {}
+            devices = application.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount)
             for i in range(openvr.k_unMaxTrackedDeviceCount):
                 if not devices[i].bPoseIsValid:
                     continue
                 if devices[i].eTrackingResult != openvr.TrackingResult_Running_OK:
                     continue
-                if (application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_TrackingReference):
-                    px, py, pz, rx, ry, rz = ovr_pose_to_osc_pose(devices[i].mDeviceToAbsoluteTracking)
-                    # debug_position(f"Basestation {device_name}", px, py, pz, rx, ry, rz)
-                    tracking_reference_positions["PX"].append(px)
-                    # tracking_reference_positions["PY"].append(0)
-                    tracking_reference_positions["PZ"].append(pz)
-                    # tracking_reference_positions["RX"].append(0)
-                    # tracking_reference_positions["RY"].append(0)
-                    # tracking_reference_positions["RZ"].append(0)
-            playspace_center = [sum(values) / len(values) if len(values) else 0 for key, values in tracking_reference_positions.items()]
-            # vielleicheicht v und ^ zusammen legen als generelle offset position für ein object?
-            for i in range(openvr.k_unMaxTrackedDeviceCount):
-                if not devices[i].bPoseIsValid:
-                    continue
-                if devices[i].eTrackingResult != openvr.TrackingResult_Running_OK:
-                    continue
-                if (application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_HMD):
-                    px, py, pz, rx, ry, rz = (numpy.array(ovr_pose_to_osc_pose(devices[i].mDeviceToAbsoluteTracking)) - numpy.array(playspace_center)).tolist()
-                    #debug_position(f"HMD", px, py, pz, rx, ry, rz)
-                    if get_parameter("VelocityZ", 0) > 0:
-                        avatar_root[4] = ry
-                    if not get_parameter("ObjectTracking/isStabilized", False):
-                        avatar_root[3] = rx
-                        avatar_root[5] = rz
-            for i in range(openvr.k_unMaxTrackedDeviceCount):
-                if not devices[i].bPoseIsValid:
-                    continue
-                if devices[i].eTrackingResult != openvr.TrackingResult_Running_OK:
-                    continue
-                device_name = application.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
-                if device_name not in trackers:
-                    continue
-                tracker = trackers[device_name]
-                px, py, pz, rx, ry, rz = ovr_pose_to_osc_pose(devices[i].mDeviceToAbsoluteTracking, True)
-                #debug_position(f"{device_name} (world)", px, py, pz, rx, ry, rz)
-                #px, py, pz, rx, ry, rz = (
-                #    (numpy.array([px, py, pz, rx, ry, rz]) - numpy.array(playspace_center))
-                #    -
-                #    (numpy.array(avatar_root) - numpy.array(playspace_center))
-                #).tolist()
-                #debug_position(f"{device_name} (local1)", px, py, pz, rx, ry, rz)
-                #print(avatar_root[4])
-                #px, pz = rotate((0, 0), (px, pz), math.radians(avatar_root[4]))
-                #debug_position(f"{device_name} (local2)", px, py, pz, rx, ry, rz)
-
-                offset = 0
-                value_local = remap(px, tracker[7 + offset], tracker[19 + offset], 0, 1)
-                value_remote = remap(px, tracker[13 + offset], tracker[25 + offset], 0, 1)
-                axe = "PX"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
-                offset += 1
-                value_local = remap(py, tracker[7 + offset], tracker[19 + offset], 0, 1)
-                value_remote = remap(py, tracker[13 + offset], tracker[25 + offset], 0, 1)
-                axe = "PY"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
-                offset += 1
-                value_local = remap(pz, tracker[7 + offset], tracker[19 + offset], 0, 1)
-                value_remote = remap(pz, tracker[13 + offset], tracker[25 + offset], 0, 1)
-                axe = "PZ"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
-                offset += 1
-                value_local = remap(rx, tracker[7 + offset] / 180, tracker[19 + offset] / 180, 0, 1)
-                value_remote = remap(rx, tracker[13 + offset] / 180, tracker[25 + offset] / 180, 0, 1)
-                axe = "RX"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
-                offset += 1
-                value_local = remap(ry, tracker[7 + offset] / 180, tracker[19 + offset] / 180, 0, 1)
-                value_remote = remap(ry, tracker[13 + offset] / 180, tracker[25 + offset] / 180, 0, 1)
-                axe = "RY"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
-                offset += 1
-                value_local = remap(rz, tracker[7 + offset] / 180, tracker[19 + offset] / 180, 0, 1)
-                value_remote = remap(rz, tracker[13 + offset] / 180, tracker[25 + offset] / 180, 0, 1)
-                axe = "RZ"
-                # print(f"{device_name} {axe} {value_local} {value_remote}")
-                send_ot_float_local(device_name, axe, 32, value_local)
-                send_ot_float_remote(device_name, axe, tracker[1 + offset], value_remote)
-
+                
+                serial_number = application.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
+                if application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_TrackingReference:
+                    tracking_references_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
+                if application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_HMD:
+                    hmd_raw = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
+                tracking_objects_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
+            tracking_reference = compute_tracking_reference_position(tracking_references_raw)
+            tracking_objects_raw["Playspace"] = set_y_and_xz_rotation_to_zero(tracking_reference)
+            tracking_reference = set_y_and_rotation_to_zero(tracking_reference)
+            
+            if hmd_raw is not None:
+                #hmd = relative_matrix(tracking_reference, hmd_raw)
+                if get_parameter("ObjectTracking/isStabilized", False) == False:
+                    if get_parameter("TrackingType", 0) > 3 and (get_parameter("VelocityX", 0) > 0 or get_parameter("VelocityY", 0) > 0 or get_parameter("VelocityZ", 0) > 0):
+                        pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
+                    if get_parameter("TrackingType", 0) <= 3:
+                        pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
+                if pill_raw is not None:
+                    pill = relative_matrix(tracking_reference, pill_raw)
+            
+            for key, object in tracking_objects_raw.items():
+                tracking_objects[key] = relative_matrix(tracking_reference, object)
+                        
+            if pill is not None:
+                for key, object in tracking_objects.items():
+                    if key in trackers:
+                        pos = relative_matrix(pill, object)
+                        pos = rotate_matrix_xz(pos, pill)
+                        send_position(key, pos, trackers[key])
         except Exception as e:
-            print(f"Error: {e}")
-            print(traceback.format_exc())
+            logger.info(f"Error: {e}")
+            logger.info(traceback.format_exc())
     
 except zeroconf._exceptions.NonUniqueNameException as e:
-    print("NonUniqueNameException, trying again...")
+    logger.info("NonUniqueNameException, trying again...")
     os.execv(sys.executable, ['python'] + sys.argv)
 except KeyboardInterrupt:
-    stop()
+    pass
 except Exception:
-    print("UNEXPECTED ERROR\n")
-    print("Please Create an Issue on GitHub with the following information:\n")
-    print(TITLE)
-    print("Config:", config)
-    print("Trackers:", trackers)
-    print("Parameters:", parameters)
-    print("Playspace Center:", playspace_center)
-    print("Avatar Root:", avatar_root)
-    print("Traceback:")
-    traceback.print_exc()
-    input("\nPress ENTER to exit")
-    stop()
+    logger.info("UNEXPECTED ERROR\n")
+    logger.info("Please Create an Issue on GitHub with the following information:\n")
+    logger.info(TITLE)
+    logger.info("Config:", config)
+    logger.info("Trackers:", trackers)
+    logger.info("Parameters:", parameters)
+    logger.info("Reference:", tracking_reference)
+    logger.info("Traceback:")
+    logger.info(traceback.format_exc())
+
+try:
+    openvr.shutdown()
+except Exception as e:
+    logger.info("Error shutting down OVR: " + str(e))
+
+if 'oscQueryServer' in globals():
+    oscQueryServer.shutdown()
+sys.exit()
