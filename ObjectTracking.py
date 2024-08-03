@@ -78,7 +78,7 @@ def wait_get_oscquery_client() -> OSCQueryClient:
     service_info = None
     while service_info is None:
         browser = OSCQueryBrowser()
-        time.sleep(1)  # Wait for discovery
+        time.sleep(2)  # Wait for discovery
         # TODO: check if multiple VRChat clients are found
         service_info = find_service_by_regex(browser, r"VRChat-Client-[A-F0-9]{6}")
     logger.info(f"Connecting to VRChat Client ({service_info.name}) ...")
@@ -98,12 +98,7 @@ def wait_get_oscquery_server() -> osc_server.ThreadingOSCUDPServer:
     Thread(target=oscQueryServer.serve_forever, daemon=True).start()
     # Announce Server
     oscServiceName = "ObjectTracking"
-    if (len(SERVICE_NAME_INDICATOR) > 0 and SERVICE_NAME_INDICATOR != "none"):
-        oscServiceName += '-'
-        if (SERVICE_NAME_INDICATOR == "random"):
-            oscServiceName += ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
-        else:
-            oscServiceName += SERVICE_NAME_INDICATOR
+    oscServiceName += ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
     logger.info(f"Announcing Server as {oscServiceName} ...")
     oscQueryService = OSCQueryService(oscServiceName, HTTP_PORT, SERVER_PORT)
     oscQueryService.advertise_endpoint("/avatar/change")
@@ -390,8 +385,7 @@ if not os.path.isfile(get_absolute_data_path("config.json")):
             "Port": 9000,
             "Server_Port": 0,
             "HTTP_Port": 0,
-            "UpdateRate": 90,
-            "ServiceNameIndicator": "None"
+            "UpdateRate": 90
         }, f, indent=4)
 
 openvr.VRInput().setActionManifestPath(get_absolute_data_path("config.json"))
@@ -403,7 +397,6 @@ PORT = int(args.port if args.port else config["Port"])
 SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_open_udp_port()) # OSC QUERY SERVER
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
-SERVICE_NAME_INDICATOR = config["ServiceNameIndicator"].strip().lower()
 AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
 TITLE = "ObjectTracking v0.1.0"
 
@@ -414,7 +407,6 @@ logger.info(f"Port: {PORT}")
 logger.info(f"Server Port: {SERVER_PORT}")
 logger.info(f"HTTP Port: {HTTP_PORT}")
 logger.info(f"Update Rate: {config['UpdateRate']}Hz / Update Interval: {UPDATE_INTERVAL * 1000:.2f}ms")
-logger.info(f"Service Name Indicator: {SERVICE_NAME_INDICATOR}")
 
 # tracker config
 trackers = {}
@@ -432,8 +424,8 @@ try:
     logger.info(f"Waiting for OSCClient to connect to {IP}:{PORT} ...")
     oscClient = udp_client.SimpleUDPClient(IP, PORT)
     
-    logger.info("Waiting for OSCQueryClient to connect to VRChat Client ...")
-    oscQueryClient = wait_get_oscquery_client()
+    #logger.info("Waiting for OSCQueryClient to connect to VRChat Client ...")
+    #oscQueryClient = wait_get_oscquery_client()
     
     logger.info("Waiting for OSCQueryServer to start ...")
     oscQueryServer = wait_get_oscquery_server()
