@@ -120,7 +120,7 @@ def send_parameter(parameter: str, value) -> None:
         logger.debug(f"<  > {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
         oscClient.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
     else:
-        logger.debug(f"<\\> {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
+        logger.debug(f"<\\\\> {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
 
 
 def send_position(tracker_name: str, matrix, tracker_config) -> None:
