@@ -436,10 +436,10 @@ try:
         wait_time = UPDATE_INTERVAL - (time.perf_counter() - cycle_start_time)
         if wait_time > 0:
             if wait_time / UPDATE_INTERVAL < 0.1:
-                logger.warn(f"Warning: about {wait_time / UPDATE_INTERVAL * 100:.0f}% frame time left")
+                logger.warning(f"Warning: about {wait_time / UPDATE_INTERVAL * 100:.0f}% frame time left")
             time.sleep(wait_time)
         else:
-            logger.warn(f"Warning: {abs(wait_time * 1000):.2f}ms behind schedule, decreasing UpdateRate recommended if this gets spammed")
+            logger.warning(f"Warning: {abs(wait_time * 1000):.2f}ms behind schedule, decreasing UpdateRate recommended if this gets spammed")
         cycle_start_time = time.perf_counter()
         try:
             hmd = None
@@ -465,10 +465,11 @@ try:
             if hmd_raw is not None:
                 #hmd = relative_matrix(tracking_reference, hmd_raw)
                 if get_parameter("ObjectTracking/isStabilized", False) == False:
-                    if get_parameter("TrackingType", 0) > 3 and (get_parameter("VelocityX", 0) > 0 or get_parameter("VelocityY", 0) > 0 or get_parameter("VelocityZ", 0) > 0):
-                        pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
-                    if get_parameter("TrackingType", 0) <= 3:
-                        pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
+                    old_pill_raw = pill_raw
+                    pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
+                    if get_parameter("TrackingType", 0) > 3 and get_parameter("VelocityX", 0) == 0 and get_parameter("VelocityY", 0) == 0 and get_parameter("VelocityZ", 0) == 0:
+                        if old_pill_raw is not None:
+                            pill_raw[0:3, 0:3] = old_pill_raw[0:3, 0:3]
                 if pill_raw is not None:
                     pill = relative_matrix(tracking_reference, pill_raw)
             
