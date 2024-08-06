@@ -6,7 +6,13 @@ Available on:
 * [Github](https://github.com/Hackebein/Object-Tracking-App/releases)
 
 This application is used with [Unitypackage](https://github.com/Hackebein/Object-Tracking-Unitypackage)
-This application has no UI. 
+This application has no UI.
+
+## Support:
+* [Hackebein's Research Lab](https://discord.gg/AqCwGqqQmW) at discord.gg
+
+### Known Issues
+* remote view is broken
 
 ## Config
 Config: `%appdata%\ObjectTracking\config.json`
