@@ -98,8 +98,7 @@ def wait_get_oscquery_server() -> osc_server.ThreadingOSCUDPServer:
     oscQueryServer = osc_server.ThreadingOSCUDPServer((IP, SERVER_PORT), disp)
     Thread(target=oscQueryServer.serve_forever, daemon=True).start()
     # Announce Server
-    oscServiceName = "ObjectTracking"
-    oscServiceName += ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    oscServiceName = "ObjectTracking-" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
     logger.info(f"Announcing Server as {oscServiceName} ...")
     oscQueryService = OSCQueryService(oscServiceName, HTTP_PORT, SERVER_PORT)
     oscQueryService.advertise_endpoint("/avatar/change")
