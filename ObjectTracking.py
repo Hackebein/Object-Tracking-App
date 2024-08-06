@@ -145,7 +145,7 @@ def send_position(tracker_name: str, matrix, tracker_config) -> None:
         #remote
         value_remote = remap(value, tracker_config[13 + offset], tracker_config[25 + offset], 0, 1)
         value_remote = clamp(value_remote, 0)
-        value_bin = round(value * (2**tracker_config[1 + offset]-1))
+        value_bin = round(value_remote * (2**tracker_config[1 + offset]-1))
         accuracy_bytes, accuracy_bits = divmod(tracker_config[1 + offset], 8)
         for i in range(accuracy_bytes):
             value_bin, byte = divmod(value_bin, 2**8)
