@@ -121,6 +121,9 @@ def send_parameter(parameter: str, value) -> None:
         oscClient.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
     else:
         logger.debug(f"<\\\\> {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
+    
+    if oscClientUnity:
+        oscClientUnity.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
 
 
 def send_position(tracker_name: str, matrix, tracker_config) -> None:
@@ -369,8 +372,8 @@ logger = get_logger()
 # Argument Parser
 parser = argparse.ArgumentParser(
     description='ObjectTracking: OpenVR tracking data to VRChat via OSC.')
-parser.add_argument('-i', '--ip', required=False, type=str, help="set OSC ip. Default=127.0.0.1")
-parser.add_argument('-p', '--port', required=False, type=str, help="set OSC port. Default=9000")
+parser.add_argument('-i', '--ip', required=False, type=str, help="set OSC ip for 2nd connection.")
+parser.add_argument('-p', '--port', required=False, type=str, help="set OSC port for 2nd connection.")
 args = parser.parse_args()
 
 application = openvr.init(openvr.VRApplication_Utility)
@@ -394,9 +397,11 @@ if not os.path.isfile(get_absolute_data_path("config.json")):
 openvr.VRInput().setActionManifestPath(get_absolute_data_path("config.json"))
 config = json.load(open(get_absolute_data_path("config.json")))
 
-IP = args.ip if args.ip else config["IP"]
+IP = config["IP"]
 # shouldn't that be read from zeroconf?
-PORT = int(args.port if args.port else config["Port"])
+PORT = int(config["Port"])
+UNITY_IP = args.ip if args.ip else IP
+UNITY_PORT = int(args.port) if args.port else PORT
 SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_open_udp_port()) # OSC QUERY SERVER
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
@@ -426,6 +431,8 @@ try:
         time.sleep(1)
     logger.info(f"Waiting for OSCClient to connect to {IP}:{PORT} ...")
     oscClient = udp_client.SimpleUDPClient(IP, PORT)
+    if UNITY_IP != IP or UNITY_PORT != PORT:
+        oscClientUnity = udp_client.SimpleUDPClient(args.ip, int(args.port))
     
     #logger.info("Waiting for OSCQueryClient to connect to VRChat Client ...")
     #oscQueryClient = wait_get_oscquery_client()
