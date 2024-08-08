@@ -39,3 +39,11 @@ Log: `%appdata%\ObjectTracking\object_tracking.log`
 ### Debug Mode
 `ObjectTrackingDebug.exe`<br>
 Debug mode lowers log level and shows log output in console
+
+## Troubleshoot
+* Ensure only one ObjectTracking.exe is running (Task Manager)
+* Restart VRChat if ObjectTracking was started afterward
+* Reset OSC config (AM > Options > OSC > Reset Config)
+* Switch avatar
+* Close all VRChat UIs
+* Nudge your thumbstick
