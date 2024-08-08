@@ -11,8 +11,9 @@ This application has no UI.
 ## Support:
 * [Hackebein's Research Lab](https://discord.gg/AqCwGqqQmW) at discord.gg
 
-### Known Issues
-* remote view is broken
+## AV3Emulator support
+[AV3Emulator](https://github.com/lyuma/Av3Emulator) support is limited to send only.
+Set launch parameter `--av3e-ip` (optional) and `--av3e-port` to send a copy of all messages to AV3Emulator.
 
 ## Config
 Config: `%appdata%\ObjectTracking\config.json`
