@@ -372,8 +372,8 @@ logger = get_logger()
 # Argument Parser
 parser = argparse.ArgumentParser(
     description='ObjectTracking: OpenVR tracking data to VRChat via OSC.')
-parser.add_argument('-i', '--ip', required=False, type=str, help="set OSC ip for 2nd connection.")
-parser.add_argument('-p', '--port', required=False, type=str, help="set OSC port for 2nd connection.")
+parser.add_argument('--av3e-ip', required=False, type=str, help="AV3Emulator IP.")
+parser.add_argument('--av3e-port', required=False, type=str, help="AV3Emulator Port.")
 args = parser.parse_args()
 
 application = openvr.init(openvr.VRApplication_Utility)
@@ -400,8 +400,8 @@ config = json.load(open(get_absolute_data_path("config.json")))
 IP = config["IP"]
 # shouldn't that be read from zeroconf?
 PORT = int(config["Port"])
-UNITY_IP = args.ip if args.ip else IP
-UNITY_PORT = int(args.port) if args.port else PORT
+AV3EMULATOR_IP = args.av3e_ip if args.av3e_ip else IP
+AV3EMULATOR_PORT = int(args.av3e_port) if args.av3e_port else None
 SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_open_udp_port()) # OSC QUERY SERVER
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
@@ -409,9 +409,8 @@ AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
 TITLE = "ObjectTracking v0.1.2"
 
 set_title(TITLE)
-
-logger.info(f"IP: {IP}")
-logger.info(f"Port: {PORT}")
+logger.info(f"IP: {IP} / {AV3EMULATOR_IP}")
+logger.info(f"Port: {PORT} / {AV3EMULATOR_PORT}")
 logger.info(f"Server Port: {SERVER_PORT}")
 logger.info(f"HTTP Port: {HTTP_PORT}")
 logger.info(f"Update Rate: {config['UpdateRate']}Hz / Update Interval: {UPDATE_INTERVAL * 1000:.2f}ms")
@@ -431,8 +430,8 @@ try:
         time.sleep(1)
     logger.info(f"Waiting for OSCClient to connect to {IP}:{PORT} ...")
     oscClient = udp_client.SimpleUDPClient(IP, PORT)
-    if UNITY_IP != IP or UNITY_PORT != PORT:
-        oscClientUnity = udp_client.SimpleUDPClient(args.ip, int(args.port))
+    if AV3EMULATOR_PORT is not None:
+        oscClientUnity = udp_client.SimpleUDPClient(AV3EMULATOR_IP, AV3EMULATOR_PORT)
     
     #logger.info("Waiting for OSCQueryClient to connect to VRChat Client ...")
     #oscQueryClient = wait_get_oscquery_client()
