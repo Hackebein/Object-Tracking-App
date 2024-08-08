@@ -196,6 +196,7 @@ def on_avatar_change(addr, value) -> None:
         None
     """
     logger.info(f"Avatar changed to {value}")
+    global parameters, trackers, tracking_references_raw
     parameters = {}
     trackers = {}
     tracking_references_raw = {}
@@ -218,7 +219,6 @@ def osc_message_handler(addr, value) -> None:
     set_parameter(parameter, value)
     if parameter == "ObjectTracking/config/index" and value == 0:
         logger.info(trackers)
-        # {'global': {1: 1}, 'LHR-3F848DD5': {1: 10, 2: 9, 3: 10, 4: 8, 5: 8, 6: 8, 7: -12, 8: -12, 9: -12, 10: -180, 11: -180, 12: -180, 13: -5, 14: 0, 15: -5, 16: -180, 17: -180, 18: -180, 19: 12, 20: 12, 21: 12, 22: 180, 23: 180, 24: 180, 25: 5, 26: 5, 27: 5, 28: 180, 29: 180, 30: 180}, 'LHR-32E2511E': {1: 8, 2: 7, 3: 8, 4: 6, 5: 6, 6: 6, 7: -12, 8: -12, 9: -12, 10: -180, 11: -180, 12: -180, 13: -2, 14: 0, 15: -2, 16: -180, 17: -180, 18: -180, 19: 12, 20: 12, 21: 12, 22: 180, 23: 180, 24: 180, 25: 2, 26: 2, 27: 2, 28: 180, 29: 180, 30: 180}, 'Playspace': {1: 10, 2: 0, 3: 10, 4: 0, 5: 0, 6: 0, 7: -12, 8: -12, 9: -12, 10: -180, 11: -180, 12: -180, 13: -5, 14: 0, 15: -5, 16: -180, 17: -180, 18: -180, 19: 12, 20: 12, 21: 12, 22: 180, 23: 180, 24: 180, 25: 5, 26: 3, 27: 5, 28: 180, 29: 180}}
     if parameter == "ObjectTracking/config/index" and value != 0:
         device = get_parameter("ObjectTracking/config/device", 0)
         index = value
@@ -439,6 +439,8 @@ try:
     
     logger.info("Waiting for OSCQueryServer to start ...")
     oscQueryServer = wait_get_oscquery_server()
+    
+    # TODO: test OSC roundtrip
     
     logger.info("Init complete!")
     cycle_start_time = time.perf_counter()
