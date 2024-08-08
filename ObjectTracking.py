@@ -122,7 +122,7 @@ def send_parameter(parameter: str, value) -> None:
     else:
         logger.debug(f"<\\\\> {AVATAR_PARAMETERS_PREFIX + parameter} = {value} ({type(value)})")
     
-    if oscClientUnity:
+    if 'oscClientUnity' in globals():
         oscClientUnity.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
 
 
