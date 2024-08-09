@@ -13,7 +13,7 @@ This application has no UI.
 
 ## AV3Emulator support
 [AV3Emulator](https://github.com/lyuma/Av3Emulator) support is limited to send only.
-Set launch parameter `--av3e-ip` (optional) and `--av3e-port` to send a copy of all messages to AV3Emulator.
+Set launch parameter `--av3e-ip` (optional) and `--av3e-port` to send a copy of all messages to AV3Emulator. Needs to match UDP Port in "Avatars 3.0 Emulator Control".
 
 ## Config
 Config: `%appdata%\ObjectTracking\config.json`
