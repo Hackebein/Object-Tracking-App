@@ -458,10 +458,13 @@ try:
     logger.info("Init complete!")
     cycle_start_time = time.perf_counter()
     while True:
-        wait_time = UPDATE_INTERVAL - (time.perf_counter() - cycle_start_time)
+        target_time = UPDATE_INTERVAL
+        if get_parameter("ObjectTracking/isRemotePreview", False):
+            target_time = 1 / 10
+        wait_time = target_time - (time.perf_counter() - cycle_start_time)
         if wait_time > 0:
-            if wait_time / UPDATE_INTERVAL < 0.1:
-                logger.warning(f"Warning: about {wait_time / UPDATE_INTERVAL * 100:.0f}% frame time left")
+            if wait_time / target_time < 0.1:
+                logger.warning(f"Warning: about {wait_time / target_time * 100:.0f}% frame time left")
             time.sleep(wait_time)
         else:
             logger.warning(f"Warning: {abs(wait_time * 1000):.2f}ms behind schedule, decreasing UpdateRate recommended if this gets spammed")
