@@ -35,8 +35,7 @@ exe1 = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
-    window=False,
+    console=True,
 )
 exe2 = EXE(
     pyz,
