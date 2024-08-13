@@ -127,7 +127,7 @@ def send_parameter(parameter: str, value) -> None:
 
 def send_default_position(tracker_name: str, tracker_config) -> None:
     offset = 0
-    for axe in ["PX", "PY", "PZ", "RX", "RY", "RZ"]:
+    for key in ["PX", "PY", "PZ", "RX", "RY", "RZ"]:
         #local
         send_parameter(f"ObjectTracking/{tracker_name}/L{key}", 0)
         
