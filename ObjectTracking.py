@@ -125,6 +125,20 @@ def send_parameter(parameter: str, value) -> None:
     if 'oscClientUnity' in globals():
         oscClientUnity.send_message(AVATAR_PARAMETERS_PREFIX + parameter, value)
 
+def send_default_position(tracker_name: str, tracker_config) -> None:
+    offset = 0
+    for axe in ["PX", "PY", "PZ", "RX", "RY", "RZ"]:
+        #local
+        send_parameter(f"ObjectTracking/{tracker_name}/L{key}", 0)
+        
+        #remote
+        accuracy_bytes, accuracy_bits = divmod(tracker_config[1 + offset], 8)
+        for i in range(accuracy_bytes):
+            send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Byte{i}", 0)
+        for i in range(accuracy_bits):
+            send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Bit{i}", 0)
+        
+        offset += 1
 
 def send_position(tracker_name: str, matrix, tracker_config) -> None:
     px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(matrix)
@@ -488,11 +502,13 @@ try:
                 tracking_objects[key] = relative_matrix(tracking_reference, object)
                         
             if pill is not None:
-                for key, object in tracking_objects.items():
-                    if key in trackers:
-                        pos = relative_matrix(pill, object)
+                for key, tracker in trackers.items():
+                    if key in tracking_objects:
+                        pos = relative_matrix(pill, tracking_objects[key])
                         pos = rotate_matrix_xz(pos, pill)
-                        send_position(key, pos, trackers[key])
+                        send_position(key, pos, tracker)
+                    else:
+                        send_default_position(key, tracker)
         except Exception as e:
             logger.info(f"Error: {e}")
             logger.info(traceback.format_exc())
