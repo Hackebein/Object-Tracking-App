@@ -20,7 +20,7 @@ Config: `%appdata%\ObjectTracking\config.json`
 
 ### IP and Port
 Default: 127.0.0.1 / 9000<br>
-IP and port of your VRChat. (Planned to be removed)
+IP and port of your VRChat.
 
 ### Server_Port
 Default: 0 - Auto<br>
