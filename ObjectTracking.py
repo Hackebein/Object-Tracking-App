@@ -420,7 +420,7 @@ SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_op
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
 AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
-TITLE = "ObjectTracking v0.1.4"
+TITLE = "ObjectTracking v0.1.5"
 
 set_title(TITLE)
 logger.info(f"IP: {IP} / {AV3EMULATOR_IP}")
