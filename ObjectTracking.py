@@ -506,6 +506,8 @@ try:
                         
             if pill is not None:
                 for key, tracker in trackers.items():
+                    if key == "global":
+                        continue
                     if key in tracking_objects:
                         pos = relative_matrix(pill, tracking_objects[key])
                         pos = rotate_matrix_xz(pos, pill)
