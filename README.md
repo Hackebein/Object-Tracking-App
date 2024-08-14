@@ -11,7 +11,11 @@ This application has no UI.
 ## Support:
 * [Hackebein's Research Lab](https://discord.gg/AqCwGqqQmW) at discord.gg
 
-## AV3Emulator support
+### Project Overview
+[Task Overview](https://github.com/users/Hackebein/projects/4/views/1)
+
+## Features
+### AV3Emulator support
 [AV3Emulator](https://github.com/lyuma/Av3Emulator) support is limited to send only.
 Set launch parameter `--av3e-ip` (optional) and `--av3e-port` to send a copy of all messages to AV3Emulator. Needs to match UDP Port in "Avatars 3.0 Emulator Control".
 
@@ -38,7 +42,7 @@ Log: `%appdata%\ObjectTracking\object_tracking.log`
 
 ### Debug Mode
 `ObjectTrackingDebug.exe`<br>
-Debug mode lowers log level and shows log output in console
+Debug mode lowers log level
 
 ## Troubleshoot
 * Ensure only one ObjectTracking.exe is running (Task Manager)
