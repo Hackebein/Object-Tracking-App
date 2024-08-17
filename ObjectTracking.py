@@ -129,7 +129,7 @@ def send_default_position(tracker_name: str, tracker_config) -> None:
     offset = 0
     for key in ["PX", "PY", "PZ", "RX", "RY", "RZ"]:
         #local
-        send_parameter(f"ObjectTracking/{tracker_name}/L{key}", 0)
+        send_parameter(f"ObjectTracking/{tracker_name}/L{key}", 0.0)
         
         #remote
         accuracy_bytes, accuracy_bits = divmod(tracker_config[1 + offset], 8)
