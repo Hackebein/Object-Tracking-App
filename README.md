@@ -40,9 +40,10 @@ Update rate of tracking data. Should not be higher than your HMDs refresh rate. 
 ## Debug
 Log: `%appdata%\ObjectTracking\object_tracking.log`
 
-### Debug Mode
-`ObjectTrackingDebug.exe`<br>
-Debug mode lowers log level
+### Launch Parameter
+`--debug`: set Log Level to Debug
+`--av3e-ip`: IP of AV3Emulator instance
+`--av3e-port`: Port of AV3Emulator instance
 
 ## Troubleshoot
 * Ensure only one ObjectTracking.exe is running (Task Manager)
