@@ -25,7 +25,7 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe1 = EXE(
+exe = EXE(
     pyz,
     a.scripts,
     [],
@@ -37,21 +37,8 @@ exe1 = EXE(
     upx=True,
     console=True,
 )
-exe2 = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='ObjectTrackingDebug',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-)
 coll = COLLECT(
-    exe1,
-    exe2,
+    exe,
     a.binaries,
     a.datas,
     strip=False,

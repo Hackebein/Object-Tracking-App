@@ -363,10 +363,8 @@ def convert_matrix_to_osc_tuple(pose: numpy.ndarray) -> tuple[float, float, floa
     return (x, y, z, pitch, yaw, roll)
 
 
-def get_logger():
-    log_level = logging.DEBUG
-    if os.path.basename(sys.executable).lower() == "objecttracking.exe":
-        log_level = logging.INFO
+def get_logger(debug=False):
+    log_level = logging.DEBUG if debug else logging.INFO
 
     logging.basicConfig(
         level=log_level,
@@ -381,14 +379,15 @@ def get_logger():
     return logging.getLogger(__name__)
 
 
-logger = get_logger()
 
 # Argument Parser
 parser = argparse.ArgumentParser(
     description='ObjectTracking: OpenVR tracking data to VRChat via OSC.')
 parser.add_argument('--av3e-ip', required=False, type=str, help="AV3Emulator IP.")
 parser.add_argument('--av3e-port', required=False, type=str, help="AV3Emulator Port.")
+parser.add_argument('--debug', required=False, action='store_true', help="Debug mode.")
 args = parser.parse_args()
+logger = get_logger(args.debug)
 
 application = openvr.init(openvr.VRApplication_Utility)
 openvr.VRApplications().addApplicationManifest(get_absolute_path("app.vrmanifest"))
