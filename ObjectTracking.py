@@ -436,7 +436,6 @@ parameters = {}
 hmd_raw = None
 pill_raw = None
 tracking_references_raw = {}
-tracking_objects_raw = {}
 try:
     logger.info("Waiting for VRChat Client to start ...")
     while not is_vrchat_running():  # TODO: check consistently for this
@@ -471,15 +470,16 @@ try:
         try:
             hmd = None
             pill = None
+            tracking_objects_raw = {}
             tracking_objects = {}
             devices = application.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount)
             for i in range(openvr.k_unMaxTrackedDeviceCount):
                 if not devices[i].bPoseIsValid:
                     continue
+                serial_number = application.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
                 if devices[i].eTrackingResult != openvr.TrackingResult_Running_OK:
                     continue
                 
-                serial_number = application.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
                 if application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_TrackingReference:
                     tracking_references_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
                 if application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_HMD:
