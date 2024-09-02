@@ -1,5 +1,5 @@
 # Hackebein's Object Tracking
-Track your real objects and track them in VRChat. All SteamVR/OpenVR tracker are supported. [Demo](https://x.com/Hackebein/status/1817729114142343460)
+Track your real objects and track them in VRChat. All SteamVR/OpenVR supported trackers are supported. [Demo](https://x.com/Hackebein/status/1817729114142343460)
 
 Available on:
 * [Steam](https://store.steampowered.com/app/3140770) (soon<sup>1</sup>)
