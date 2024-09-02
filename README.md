@@ -19,7 +19,7 @@ This application is used with [Unitypackage](https://github.com/Hackebein/Object
 Everything before version 1.0 is to be seen as pre-release.
 
 ### Pre-release
-Pre-releases are essentially test versions that have undergone less rigorous testing and may contain bugs. These versions have limited compatibility and are typically designed to work only with the latest Unitypackage version.
+Pre-releases are essentially test versions that have undergone less rigorous testing and may contain bugs. These versions have limited compatibility and are typically designed to work only with the latest provided Unitypackage version.
 
 ### Steam
 Steam version receives auto updates.
