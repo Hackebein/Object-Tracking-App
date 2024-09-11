@@ -479,6 +479,8 @@ try:
                 serial_number = application.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
                 if devices[i].eTrackingResult != openvr.TrackingResult_Running_OK:
                     continue
+                if get_parameter("ObjectTracking/tracker/" + serial_number + "/enabled", True) == False:
+                    continue
                 
                 if application.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_TrackingReference:
                     tracking_references_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
@@ -486,7 +488,8 @@ try:
                     hmd_raw = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
                 tracking_objects_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
             tracking_reference = compute_tracking_reference_position(tracking_references_raw)
-            tracking_objects_raw["Playspace"] = set_y_and_xz_rotation_to_zero(tracking_reference)
+            if get_parameter("ObjectTracking/tracker/Playspace/enabled", True):
+                tracking_objects_raw["Playspace"] = set_y_and_xz_rotation_to_zero(tracking_reference)
             tracking_reference = set_y_and_rotation_to_zero(tracking_reference)
             
             if hmd_raw is not None:
