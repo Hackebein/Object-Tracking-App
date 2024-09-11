@@ -25,13 +25,11 @@ Pre-releases are essentially test versions that have undergone less rigorous tes
 Steam version receives auto updates.
 
 Available branches:
-* **Default**: 0.1.11
-* **Beta**: 0.1.11
+* **Default**: 0.1.12
+* **Beta**: 0.1.12
 
 ### Github
-* [0.1.11](https://github.com/Hackebein/Object-Tracking-App/releases/download/0.1.11/HackebeinObjectTracking-0.1.11-win64.zip)
-* [0.1.10](https://github.com/Hackebein/Object-Tracking-App/releases/download/0.1.10/HackebeinObjectTracking-0.1.10-win64.zip) (legacy)
-* [0.1.9](https://github.com/Hackebein/Object-Tracking-App/releases/download/0.1.9/HackebeinObjectTracking-0.1.9-win64.zip) (legacy)
+* [0.1.12](https://github.com/Hackebein/Object-Tracking-App/releases/download/0.1.12/HackebeinObjectTracking-0.1.12-win64.zip)
 
 ## Features
 ### AV3Emulator support
