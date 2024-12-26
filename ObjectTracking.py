@@ -12,6 +12,7 @@ import ctypes
 import argparse
 import zeroconf
 import logging
+import read_registry
 from logging.handlers import RotatingFileHandler
 from pythonosc import udp_client, dispatcher, osc_server
 from tinyoscquery.queryservice import OSCQueryService
@@ -199,6 +200,25 @@ def get_parameter(parameter: str, fallback):
     global parameters
     return parameters.get(parameter, fallback)
 
+def add_hash_to_key_name(key: str) -> str:
+    """
+    Appends a hash to the given key using a hashing algorithm similar to the one in the provided C# function.
+
+    The hash is calculated by starting with 5381 and, for each character in the key, multiplying the current hash by 33
+    and XOR'ing it with the character's ASCII value. The result is masked to simulate a 32-bit unsigned integer.
+
+    Args:
+        key (str): The original key string.
+
+    Returns:
+        str: The key appended with "_h" followed by the computed hash.
+    """
+    hash_val = 5381
+    for c in key:
+        hash_val = (hash_val * 33) ^ ord(c)
+        hash_val &= 0xFFFFFFFF  # Simulate 32-bit unsigned integer overflow
+    return f"{key}_h{hash_val}"
+
 
 def on_avatar_change(addr, value) -> None:
     """
@@ -232,6 +252,7 @@ def osc_message_handler(addr, value) -> None:
         on_avatar_change(addr, value)
     set_parameter(parameter, value)
     if parameter == "ObjectTracking/config/index" and value == 0:
+        update_player_height()
         logger.info(trackers)
     if parameter == "ObjectTracking/config/index" and value != 0:
         device = get_parameter("ObjectTracking/config/device", 0)
@@ -379,6 +400,23 @@ def get_logger(debug=False):
     return logging.getLogger(__name__)
 
 
+def update_player_height():
+    # player height setting is not available as a parameter in VRChat
+    # therefore we have to read it from the registry
+    # Feature request: https://feedback.vrchat.com/feature-requests/p/irl-to-vr-scale
+    player_height = read_registry.read_registry_raw_qword(
+        read_registry.HKEY_CURRENT_USER,
+        r"Software\VRChat\VRChat",
+        add_hash_to_key_name("PlayerHeight"),
+        1.7
+    ) * 100
+
+    # 3'0" to 8'0", 92cm to 243cm
+    heights = [i * 2.54 for i in range(3 * 12, 8 * 12 + 1)] + [i for i in range(92, 243 + 1)]
+
+    closest_height_index = heights.index(min(heights, key=lambda x: abs(x - player_height)))
+    send_parameter(f"ObjectTracking/playerHeightIndex", closest_height_index)
+
 
 # Argument Parser
 parser = argparse.ArgumentParser(
@@ -393,7 +431,7 @@ application = openvr.init(openvr.VRApplication_Utility)
 openvr.VRApplications().addApplicationManifest(get_absolute_path("app.vrmanifest"))
 
 # first start
-if not os.path.isfile(get_absolute_data_path("config.json")):
+if getattr(sys, 'frozen', False) and not os.path.isfile(get_absolute_data_path("config.json")):
     try:
         openvr.VRApplications().setApplicationAutoLaunch("Hackebein.ObjectTracking", True)
     except Exception as e:
@@ -494,7 +532,7 @@ try:
             
             if hmd_raw is not None:
                 #hmd = relative_matrix(tracking_reference, hmd_raw)
-                if get_parameter("ObjectTracking/isStabilized", False) == False:
+                if get_parameter("ObjectTracking/isStabilized", False) == False and get_parameter("ObjectTracking/isLazyStabilized", False) == False:
                     old_pill_raw = pill_raw
                     pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
                     if get_parameter("TrackingType", 0) > 3 and get_parameter("VelocityX", 0) == 0 and get_parameter("VelocityY", 0) == 0 and get_parameter("VelocityZ", 0) == 0:
@@ -503,8 +541,8 @@ try:
                 if pill_raw is not None:
                     pill = relative_matrix(tracking_reference, pill_raw)
             
-            for key, object in tracking_objects_raw.items():
-                tracking_objects[key] = relative_matrix(tracking_reference, object)
+            for key, object_raw in tracking_objects_raw.items():
+                tracking_objects[key] = relative_matrix(tracking_reference, object_raw)
                         
             if pill is not None:
                 for key, tracker in trackers.items():
