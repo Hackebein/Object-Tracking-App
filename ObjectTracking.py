@@ -313,18 +313,34 @@ def print_matrix(name: str, matrix: numpy.ndarray) -> None:
 
 def compute_tracking_reference_position(tracking_reference_positions):
     tracking_reference_positions = numpy.array(list(tracking_reference_positions.values()))
+    
     tracking_reference_position = numpy.eye(4)
-    if len(tracking_reference_positions):
-        # Position
-        tracking_reference_position[:3, 3] = numpy.sum(tracking_reference_positions[:, 0:3, 3], axis=0) / len(tracking_reference_positions)
-
-        # Rotation
-        quaternions = [Rotation.from_matrix(matrix).as_quat(False) for matrix in tracking_reference_positions[:, 0:3, 0:3]]
-        q_mean = numpy.array(quaternions).mean(axis=0)
-        avg_quaternion =  q_mean / numpy.linalg.norm(q_mean)
-        tracking_reference_position[:3, :3] = Rotation.from_quat(avg_quaternion).as_matrix()
+    n = len(tracking_reference_positions)
+    if n == 0:
+        return tracking_reference_position
+    
+    tracking_reference_position[:3, 3] = tracking_reference_positions[:, 0:3, 3].mean(axis=0)
+    
+    # Extract quaternions in [x, y, z, w] order
+    quaternions = []
+    for i, matrix_3x3 in enumerate(tracking_reference_positions[:, 0:3, 0:3]):
+        q = Rotation.from_matrix(matrix_3x3).as_quat(False)  # shape (4,) in [x, y, z, w]
+        
+        # Ensure sign consistency with first quaternion
+        if i > 0:
+            # If dot product is negative, flip the sign
+            if numpy.dot(q, quaternions[0]) < 0:
+                q = -q
+        quaternions.append(q)
+    
+    # Stack and sum
+    quaternions = numpy.stack(quaternions, axis=0)  # shape (N, 4)
+    q_sum = numpy.sum(quaternions, axis=0)
+    q_avg = q_sum / numpy.linalg.norm(q_sum)
+    R_avg = Rotation.from_quat(q_avg).as_matrix()  # shape (3, 3)
+    tracking_reference_position[:3, :3] = R_avg
+    
     return tracking_reference_position
-
 
 
 def relative_matrix(parent: numpy.ndarray, child: numpy.ndarray) -> numpy.ndarray:
