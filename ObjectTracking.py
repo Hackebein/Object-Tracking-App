@@ -473,7 +473,7 @@ SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_op
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
 AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
-TITLE = "ObjectTracking v0.1.14"
+TITLE = "ObjectTracking v0.1.15"
 
 set_title(TITLE)
 logger.info(f"IP: {IP} / {AV3EMULATOR_IP}")
@@ -548,7 +548,7 @@ try:
             
             if hmd_raw is not None:
                 #hmd = relative_matrix(tracking_reference, hmd_raw)
-                if get_parameter("ObjectTracking/isStabilized", False) == False and get_parameter("ObjectTracking/isLazyStabilized", False) == False:
+                if get_parameter("ObjectTracking/isStabilized", False) == False or get_parameter("ObjectTracking/isLazyStabilized", False) == False:
                     old_pill_raw = pill_raw
                     pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
                     if get_parameter("TrackingType", 0) > 3 and get_parameter("VelocityX", 0) == 0 and get_parameter("VelocityY", 0) == 0 and get_parameter("VelocityZ", 0) == 0:
