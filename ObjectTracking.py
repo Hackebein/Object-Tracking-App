@@ -154,24 +154,32 @@ def send_position(tracker_name: str, matrix, tracker_config) -> None:
         "RZ": rz*180  # 5
     }.items():
         logger.debug(f"Sending {tracker_name}/{key} = {value}")
-        
-        #local
-        value_local = remap(value, tracker_config[7 + offset], tracker_config[19 + offset], 0, 1)
-        value_local = clamp(value_local, 0)
+
+        # local
+        value_local = numpy.interp(
+            value,
+            [tracker_config[7 + offset], tracker_config[19 + offset]],
+            [0, 1]
+        )
+        value_local = numpy.clip(value_local, 0, 1)
         send_parameter(f"ObjectTracking/{tracker_name}/L{key}", value_local)
-        
-        #remote
-        value_remote = remap(value, tracker_config[13 + offset], tracker_config[25 + offset], 0, 1)
-        value_remote = clamp(value_remote, 0)
-        value_bin = round(value_remote * (2**tracker_config[1 + offset]-1))
+
+        # remote
+        value_remote = numpy.interp(
+            value,
+            [tracker_config[13 + offset], tracker_config[25 + offset]],
+            [0, 1]
+        )
+        value_remote = numpy.clip(value_remote, 0, 1)
+        value_bin = round(value_remote * (2**tracker_config[1 + offset] - 1))
         accuracy_bytes, accuracy_bits = divmod(tracker_config[1 + offset], 8)
         for i in range(accuracy_bytes):
             value_bin, byte = divmod(value_bin, 2**8)
             send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Byte{i}", byte)
         for i in range(accuracy_bits):
-            value_bin, bit = divmod(value_bin, 2**1)
+            value_bin, bit = divmod(value_bin, 2)
             send_parameter(f"ObjectTracking/{tracker_name}/R{key}-Bit{i}", bit)
-        
+
         offset += 1
 
 
@@ -234,6 +242,7 @@ def on_avatar_change(addr, value) -> None:
     parameters = {}
     trackers = {}
     tracking_references_raw = {}
+    tracking_reference_vector = None
 
 
 def osc_message_handler(addr, value) -> None:
@@ -274,72 +283,40 @@ def osc_message_handler(addr, value) -> None:
         oscClient.send_message("/input/Vertical", 1.0)
 
 
-def clamp(n, minn=-1, maxn=1):
-    """Clamps a value between a minimum and maximum value"""
-    return max(min(maxn, n), minn)
-
-
-def remap(x: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
-    if in_max == in_min:
-        return 0
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-
 def rotate_matrix_xz(matrix: numpy.ndarray, pill: numpy.ndarray) -> numpy.ndarray:
-    # Convert degrees to radians
     px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(pill)
-    radians = numpy.deg2rad(ry * 180)
+    rot_y = Rotation.from_euler('y', ry * 180, degrees=True).as_matrix()
 
-    rotation = numpy.array([
-        [numpy.cos(radians), 0, numpy.sin(radians)],
-        [0, 1, 0],
-        [-numpy.sin(radians), 0, numpy.cos(radians)]
-    ])
-        
     # position adjustment
-    matrix[:3, 3] = numpy.dot(rotation, matrix[:3, 3])
-    
+    matrix[:3, 3] = rot_y @ matrix[:3, 3]
+
     # rotation adjustment
-    matrix[:3, :3] = numpy.dot(rotation, matrix[:3, :3])
-    matrix[:3, :3] = numpy.dot(rotation, matrix[:3, :3])
-        
+    matrix[:3, :3] = rot_y @ matrix[:3, :3]
+    # TODO: this is not correct, but it works
+    matrix[:3, :3] = rot_y @ matrix[:3, :3]
+
     return matrix
-    
-    
+
+
 def print_matrix(name: str, matrix: numpy.ndarray) -> None:
     px, py, pz, rx, ry, rz = convert_matrix_to_osc_tuple(matrix)
     logger.debug(f"{name}: px: {round(px, 3)}m, py: {round(py, 3)}m, pz: {round(pz, 3)}m, rx: {round(rx*180, 2)}° ({round(rx, 2)}), ry: {round(ry*180, 2)}° ({round(ry, 2)}), rz: {round(rz*180, 2)}° ({round(rz, 2)})")
 
 
-def compute_tracking_reference_position(tracking_reference_positions):
-    tracking_reference_positions = numpy.array(list(tracking_reference_positions.values()))
-    
+def compute_tracking_reference_position(references):
+    global tracking_reference_vector
+    order = sorted(references.keys())
+    references = numpy.array(list(references.values()))
+
     tracking_reference_position = numpy.eye(4)
-    n = len(tracking_reference_positions)
-    if n == 0:
+    if len(references) == 0:
         return tracking_reference_position
     
-    tracking_reference_position[:3, 3] = tracking_reference_positions[:, 0:3, 3].mean(axis=0)
-    
-    # Extract quaternions in [x, y, z, w] order
-    quaternions = []
-    for i, matrix_3x3 in enumerate(tracking_reference_positions[:, 0:3, 0:3]):
-        q = Rotation.from_matrix(matrix_3x3).as_quat(False)  # shape (4,) in [x, y, z, w]
+    if len(references) == 1:
+        return references[0]
         
-        # Ensure sign consistency with first quaternion
-        if i > 0:
-            # If dot product is negative, flip the sign
-            if numpy.dot(q, quaternions[0]) < 0:
-                q = -q
-        quaternions.append(q)
-    
-    # Stack and sum
-    quaternions = numpy.stack(quaternions, axis=0)  # shape (N, 4)
-    q_sum = numpy.sum(quaternions, axis=0)
-    q_avg = q_sum / numpy.linalg.norm(q_sum)
-    R_avg = Rotation.from_quat(q_avg).as_matrix()  # shape (3, 3)
-    tracking_reference_position[:3, :3] = R_avg
-    
+    # positions
+    tracking_reference_position[:3, 3] = references[:, 0:3, 3].mean(axis=0)
     return tracking_reference_position
 
 
@@ -358,27 +335,6 @@ def convert_matrix34_to_matrix44(matrix34: openvr.HmdMatrix34_t) -> numpy.ndarra
         [-matrix34.m[2][0], -matrix34.m[2][1], matrix34.m[2][2], -matrix34.m[2][3]],
         [0, 0, 0, 1]
     ])
-
-
-def set_y_and_xz_rotation_to_zero(matrix: numpy.ndarray) -> numpy.ndarray:
-    # set y to zero
-    matrix[1, 3] = 0
-    # set x and z rotation to 0
-    theta = numpy.arctan2(matrix[2, 0], matrix[0, 0])
-    matrix[0:3, 0:3] = numpy.array([
-        [numpy.cos(theta), 0, numpy.sin(theta)],
-        [0, 1, 0],
-        [-numpy.sin(theta), 0, numpy.cos(theta)]
-    ])
-    return matrix
-
-
-def set_y_and_rotation_to_zero(matrix: numpy.ndarray) -> numpy.ndarray:
-    # set y to zero
-    matrix[1, 3] = 0
-    # set rotation to 0
-    matrix[0:3, 0:3] = numpy.eye(3)
-    return matrix
 
 
 def convert_matrix_to_osc_tuple(pose: numpy.ndarray) -> tuple[float, float, float, float, float, float]:
@@ -490,6 +446,7 @@ parameters = {}
 hmd_raw = None
 pill_raw = None
 tracking_references_raw = {}
+tracking_reference_vector = None
 try:
     logger.info("Waiting for VRChat Client to start ...")
     while not is_vrchat_running():  # TODO: check consistently for this
@@ -505,9 +462,13 @@ try:
     logger.info("Waiting for OSCQueryServer to start ...")
     oscQueryServer = wait_get_oscquery_server()
     
-    # TODO: test OSC roundtrip
+    logger.info("Sending test OSC message ...")
+    while get_parameter("ObjectTracking/config/global", True):
+        send_parameter("ObjectTracking/config/global", True)
+        time.sleep(1)
     
     logger.info("Init complete!")
+
     cycle_start_time = time.perf_counter()
     while True:
         target_time = UPDATE_INTERVAL
@@ -542,15 +503,27 @@ try:
                     hmd_raw = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
                 tracking_objects_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
             tracking_reference = compute_tracking_reference_position(tracking_references_raw)
-            if get_parameter("ObjectTracking/tracker/Playspace/enabled", True):
-                tracking_objects_raw["Playspace"] = set_y_and_xz_rotation_to_zero(tracking_reference)
-            tracking_reference = set_y_and_rotation_to_zero(tracking_reference)
-            
+            if get_parameter("ObjectTracking/tracker/PlaySpace/enabled", True):
+                order = sorted(tracking_references_raw.keys())
+                tracking_objects_raw["PlaySpace"] = tracking_references_raw[order[0]]
+                tracking_objects_raw["PlaySpace"][1, 3] = 0
+                yaw = Rotation.from_matrix(tracking_objects_raw["PlaySpace"][0:3, 0:3]).as_euler("YXZ")[0]
+                tracking_objects_raw["PlaySpace"][0:3, 0:3] = Rotation.from_euler("YXZ", [yaw, 0, 0]).as_matrix()
+
+            # set y to zero
+            tracking_reference[1, 3] = 0
+            # set rotation to 0
+            tracking_reference[0:3, 0:3] = numpy.eye(3)
+
             if hmd_raw is not None:
                 #hmd = relative_matrix(tracking_reference, hmd_raw)
                 if not get_parameter("ObjectTracking/isStabilized", False) and not get_parameter("ObjectTracking/isLazyStabilized", False):
                     old_pill_raw = pill_raw
-                    pill_raw = set_y_and_xz_rotation_to_zero(hmd_raw)
+                    pill_raw = hmd_raw
+                    pill_raw[1, 3] = 0
+                    yaw = Rotation.from_matrix(pill_raw[0:3, 0:3]).as_euler("YXZ")[0]
+                    # TODO: -yaw, otherwise it's inverted z axis for some reason
+                    pill_raw[0:3, 0:3] = Rotation.from_euler("YXZ", [-yaw, 0, 0]).as_matrix()
                     if get_parameter("TrackingType", 0) > 3 and get_parameter("VelocityX", 0) == 0 and get_parameter("VelocityY", 0) == 0 and get_parameter("VelocityZ", 0) == 0:
                         if old_pill_raw is not None:
                             pill_raw[0:3, 0:3] = old_pill_raw[0:3, 0:3]
