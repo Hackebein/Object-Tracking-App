@@ -429,7 +429,7 @@ SERVER_PORT = int(config["Server_Port"] if config["Server_Port"] > 0 else get_op
 HTTP_PORT = int(config["HTTP_Port"] if config["HTTP_Port"] > 0 else get_open_tcp_port()) # OSC QUERY
 UPDATE_INTERVAL = 1 / float(config['UpdateRate'])
 AVATAR_PARAMETERS_PREFIX = "/avatar/parameters/"
-TITLE = "ObjectTracking v0.1.17"
+TITLE = "ObjectTracking v0.1.18"
 
 set_title(TITLE)
 logger.info(f"IP: {IP} / {AV3EMULATOR_IP}")
@@ -503,9 +503,9 @@ try:
                     hmd_raw = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
                 tracking_objects_raw[serial_number] = convert_matrix34_to_matrix44(devices[i].mDeviceToAbsoluteTracking)
             tracking_reference = compute_tracking_reference_position(tracking_references_raw)
-            if get_parameter("ObjectTracking/tracker/PlaySpace/enabled", True):
+            if get_parameter("ObjectTracking/tracker/PlaySpace/enabled", True) and len(tracking_references_raw) > 0:
                 order = sorted(tracking_references_raw.keys())
-                tracking_objects_raw["PlaySpace"] = tracking_references_raw[order[0]]
+                tracking_objects_raw["PlaySpace"] = tracking_reference
                 tracking_objects_raw["PlaySpace"][1, 3] = 0
                 yaw = Rotation.from_matrix(tracking_objects_raw["PlaySpace"][0:3, 0:3]).as_euler("YXZ")[0]
                 tracking_objects_raw["PlaySpace"][0:3, 0:3] = Rotation.from_euler("YXZ", [yaw, 0, 0]).as_matrix()
